@@ -1,4 +1,4 @@
-const CACHE_NAME = 'cartola-dashboard-v1';
+const CACHE_NAME = 'cartola-v1';
 const ASSETS = [
     './',
     './index.html',
