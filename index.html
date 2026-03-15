@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Nossa Liga Cartola FC</title>
+    
+    <!-- PWA Meta Tags -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#ea580c">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="icon-192x192.png">
+
+    <!-- Tailwind CSS para estilização rápida e moderna -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons para os ícones -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body {
+            background-color: #f3f4f6;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .card-hover {
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        }
+        .card-hover:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+        }
+        /* Loading spinner */
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #f97316; /* Laranja Cartola */
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="min-h-screen pb-12">
+
+    <!-- Header -->
+    <header class="bg-orange-600 text-white shadow-md py-6 mb-8">
+        <div class="container mx-auto px-4 flex items-center justify-center gap-3">
+            <i data-lucide="trophy" class="w-8 h-8"></i>
+            <h1 class="text-3xl font-bold tracking-tight">Estatísticas da Liga</h1>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container mx-auto px-4">
+        
+        <!-- Área de Loading -->
+        <div id="loading" class="py-20 text-center">
+            <div class="loader mb-4"></div>
+            <p class="text-gray-600 font-medium animate-pulse">Buscando dados na API do Cartola...</p>
+        </div>
+
+        <!-- Navegação por Abas (Oculta por padrão até carregar) -->
+        <div id="tabs-container" class="hidden mb-6 border-b border-gray-200">
+            <nav class="flex overflow-x-auto space-x-4 pb-2" aria-label="Tabs">
+                <button onclick="changeTab('cards')" id="tab-cards" class="tab-btn text-orange-600 border-orange-600 border-b-2 py-2 px-4 text-sm font-medium whitespace-nowrap transition-colors">Visão Geral</button>
+                <button onclick="changeTab('geral')" id="tab-geral" class="tab-btn text-gray-500 hover:text-gray-700 py-2 px-4 text-sm font-medium whitespace-nowrap transition-colors">Ranking Geral</button>
+                <button onclick="changeTab('patrimonio')" id="tab-patrimonio" class="tab-btn text-gray-500 hover:text-gray-700 py-2 px-4 text-sm font-medium whitespace-nowrap transition-colors">Patrimônio</button>
+                <button onclick="changeTab('rodada')" id="tab-rodada" class="tab-btn text-gray-500 hover:text-gray-700 py-2 px-4 text-sm font-medium whitespace-nowrap transition-colors">Por Rodada</button>
+                <button onclick="changeTab('premiacao')" id="tab-premiacao" class="tab-btn text-gray-500 hover:text-gray-700 py-2 px-4 text-sm font-medium whitespace-nowrap transition-colors">Premiação</button>
+            </nav>
+        </div>
+
+        <!-- Conteúdo das Abas -->
+        <div id="views-container" class="hidden">
+            <!-- Container do Grid de Jogadores (Visão Geral) -->
+            <div id="view-cards" class="view-section">
+                <div id="players-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <!-- Os cards dos jogadores serão inseridos aqui pelo JavaScript -->
+                </div>
+            </div>
+
+            <!-- Container Ranking Geral -->
+            <div id="view-geral" class="view-section hidden max-w-4xl mx-auto">
+                <div id="ranking-geral-container"></div>
+            </div>
+
+            <!-- Container Patrimônio -->
+            <div id="view-patrimonio" class="view-section hidden max-w-4xl mx-auto">
+                <div id="ranking-patrimonio-container"></div>
+            </div>
+
+            <!-- Container Por Rodada -->
+            <div id="view-rodada" class="view-section hidden max-w-4xl mx-auto">
+                <div class="mb-4 flex flex-col sm:flex-row items-start sm:items-center gap-3 bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                    <label for="rodada-select" class="font-medium text-gray-700 whitespace-nowrap">Selecione a Rodada:</label>
+                    <select id="rodada-select" onchange="renderRankingRodada(this.value)" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-orange-500 focus:border-orange-500 block w-full sm:w-auto p-2.5 outline-none">
+                        <!-- Options preenchidas via JS -->
+                    </select>
+                </div>
+                <div id="ranking-rodada-container"></div>
+            </div>
+
+            <!-- Container Premiação -->
+            <div id="view-premiacao" class="view-section hidden max-w-4xl mx-auto">
+                <div id="ranking-premiacao-container"></div>
+            </div>
+        </div>
+        
+        <!-- Mensagem de Erro (Oculta por padrão) -->
+        <div id="error-message" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative max-w-2xl mx-auto mt-8 text-center" role="alert">
+            <strong class="font-bold" id="error-title">Ops! </strong>
+            <span class="block sm:inline" id="error-text">Ocorreu um erro ao carregar os dados. A API pode estar bloqueando os nossos proxies.</span>
+            <button onclick="fetchData()" class="mt-4 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">
+                Tentar Novamente
+            </button>
+        </div>
+
+    </main>
+
+    <script>
+        // Inicializa os ícones do Lucide
+        lucide.createIcons();
+
+        // Mapeamento dos jogadores fornecido
+        const jogadores = [
+            { nomeOriginal: 'GEORGE', id: 26323967 },
+            { nomeOriginal: 'XINGU', id: 26331075 },
+            { nomeOriginal: 'LEO', id: 20129034 },
+            { nomeOriginal: 'PAULO', id: 27110420 },
+            { nomeOriginal: 'VITOR', id: 5214103 },
+            { nomeOriginal: 'RAFAEL', id: 22004383 }
+        ];
+
+        // Função para formatar moeda (Cartoletas)
+        const formatMoney = (value) => {
+            if (value === undefined || value === null) return "C$ 0.00";
+            return `C$ ${value.toFixed(2)}`;
+        };
+
+        // Função para formatar pontos
+        const formatPoints = (value) => {
+            if (value === undefined || value === null) return "0.00";
+            return value.toFixed(2);
+        };
+
+        // Variáveis globais para armazenar os dados e rodada máxima para as abas
+        let appData = [];
+        let maxRound = 1;
+
+        // Função para buscar a rodada atual da API dinamicamente
+        async function fetchCurrentRound() {
+            const apiUrl = 'https://api.cartola.globo.com/mercado/status';
+            const proxies = [
+                `https://api.codetabs.com/v1/proxy?quest=${apiUrl}`,
+                `https://corsproxy.io/?${encodeURIComponent(apiUrl)}`,
+                `https://api.allorigins.win/raw?url=${encodeURIComponent(apiUrl)}`
+            ];
+
+            for (const proxyUrl of proxies) {
+                try {
+                    const response = await fetch(proxyUrl, { cache: "no-store" });
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data && data.rodada_atual) {
+                            let rodada = data.rodada_atual;
+                            
+                            // Regra solicitada: Considerar a rodada atual apenas se o mercado estiver aberto.
+                            // Mercado fechado (2) = jogos a decorrer, rodada não finalizada, então ignoramos e usamos a anterior.
+                            if (data.status_mercado === 2) {
+                                rodada = rodada - 1;
+                                console.log(`Mercado fechado. A exibir dados consolidados até à rodada: ${rodada}`);
+                            } else {
+                                console.log(`Mercado aberto. A exibir dados até à rodada: ${rodada}`);
+                            }
+                            
+                            // Garante que retorne no mínimo a rodada 1 (caso ocorra erro no início do campeonato)
+                            return Math.max(1, rodada);
+                        }
+                    }
+                } catch (error) {
+                    console.warn(`Proxy falhou ao buscar status da rodada: ${proxyUrl}`);
+                }
+            }
+            // Fallback de segurança caso a API falhe, retorna 6 conforme mencionado
+            console.warn("Não foi possível detetar a rodada dinamicamente. A usar a rodada 6.");
+            return 6;
+        }
+
+        // Função para buscar dados de um jogador por rodada
+        async function fetchCartolaData(id, rodada, isCurrent = false) {
+            // Se for a rodada atual, busca o endpoint raiz (dados mais recentes/parciais)
+            // Se for rodada passada, busca o histórico
+            const apiUrl = isCurrent 
+                ? `https://api.cartola.globo.com/time/id/${id}`
+                : `https://api.cartola.globo.com/time/id/${id}/${rodada}`;
+            
+            // Lista de proxies públicos transparentes
+            const proxies = [
+                `https://api.codetabs.com/v1/proxy?quest=${apiUrl}`,
+                `https://corsproxy.io/?${encodeURIComponent(apiUrl)}`,
+                `https://api.allorigins.win/raw?url=${encodeURIComponent(apiUrl)}`
+            ];
+
+            let lastError;
+
+            for (const proxyUrl of proxies) {
+                try {
+                    const response = await fetch(proxyUrl, { cache: "no-store" });
+                    if (response.ok) {
+                        const cartolaData = await response.json();
+                        // Verifica se o JSON retornado tem a estrutura esperada
+                        if (cartolaData && cartolaData.time) {
+                            return cartolaData;
+                        }
+                    }
+                } catch (error) {
+                    lastError = error;
+                }
+            }
+            throw new Error(`Falha na rodada ${rodada}.`);
+        }
+
+        // Busca o histórico completo de 1 até à rodada atual para um jogador
+        async function fetchPlayerHistory(jogador, rodadaAtual) {
+            const promises = [];
+            for (let r = 1; r <= rodadaAtual; r++) {
+                // Marca como 'true' se for a última rodada do loop (a atual)
+                const isCurrent = (r === rodadaAtual);
+                promises.push(fetchCartolaData(jogador.id, r, isCurrent));
+            }
+            
+            const resultados = await Promise.allSettled(promises);
+            
+            const history = resultados.map((res, index) => {
+                if (res.status === 'fulfilled') {
+                    return { rodada: index + 1, data: res.value, error: false };
+                } else {
+                    return { rodada: index + 1, data: null, error: true };
+                }
+            });
+
+            // Considera sucesso se pelo menos uma rodada carregou (para não quebrar o jogador inteiro por falha em 1 rodada)
+            const sucessos = history.filter(h => !h.error);
+            if (sucessos.length === 0) {
+                throw new Error(`Não foi possível obter nenhuma rodada para ${jogador.nomeOriginal}`);
+            }
+
+            return { ...jogador, history };
+        }
+
+        // Função principal para buscar os dados de todos
+        async function fetchData() {
+            const loadingEl = document.getElementById('loading');
+            const tabsEl = document.getElementById('tabs-container');
+            const viewsEl = document.getElementById('views-container');
+            const gridEl = document.getElementById('players-grid');
+            const errorEl = document.getElementById('error-message');
+            const errorTextEl = document.getElementById('error-text');
+
+            // Reset UI
+            loadingEl.classList.remove('hidden');
+            tabsEl.classList.add('hidden');
+            viewsEl.classList.add('hidden');
+            errorEl.classList.add('hidden');
+            gridEl.innerHTML = '';
+
+            try {
+                // 1. Primeiro verifica qual é a rodada atual na API
+                const loadingText = loadingEl.querySelector('p');
+                loadingText.textContent = "A verificar a rodada atual no mercado...";
+                const rodadaAtual = await fetchCurrentRound();
+                
+                loadingText.textContent = `A buscar dados até à rodada ${rodadaAtual}...`;
+
+                // 2. Criando array de promessas passando o número correto de rodadas
+                const fetchPromises = jogadores.map(jogador => fetchPlayerHistory(jogador, rodadaAtual));
+
+                // Promise.allSettled aguarda todas as requisições
+                const resultados = await Promise.allSettled(fetchPromises);
+                
+                // Filtra apenas as que deram sucesso
+                const sucessos = resultados
+                    .filter(r => r.status === 'fulfilled')
+                    .map(r => r.value);
+
+                const falhas = resultados.filter(r => r.status === 'rejected');
+
+                if (sucessos.length === 0) {
+                    throw new Error("Não foi possível aceder à API do Cartola no momento devido a bloqueios de segurança (CORS). Tente novamente mais tarde.");
+                }
+
+                if (falhas.length > 0) {
+                    console.warn(`${falhas.length} jogador(es) não puderam ser carregados.`);
+                }
+                
+                // Salvar nos dados globais
+                appData = sucessos;
+                maxRound = rodadaAtual;
+
+                // Ordenar para a Visão Geral (Cards) por património da última rodada disponível (do maior para o menor)
+                const cardsData = [...sucessos].sort((a, b) => {
+                    const lastA = [...a.history].reverse().find(h => !h.error)?.data;
+                    const lastB = [...b.history].reverse().find(h => !h.error)?.data;
+                    const patA = lastA?.patrimonio || 0;
+                    const patB = lastB?.patrimonio || 0;
+                    return patB - patA;
+                });
+
+                // Renderizar tudo
+                renderCards(cardsData);
+                renderRankingGeral();
+                renderRankingPatrimonio();
+                renderRankingRodadaSelector();
+                renderRankingPremiacao();
+
+                // Atualizar UI
+                loadingEl.classList.add('hidden');
+                tabsEl.classList.remove('hidden');
+                viewsEl.classList.remove('hidden');
+                
+                // Inicializar ícones finais globais (como as medalhas)
+                lucide.createIcons();
+
+            } catch (error) {
+                console.error("Erro fatal ao buscar dados:", error);
+                errorTextEl.textContent = error.message;
+                loadingEl.classList.add('hidden');
+                errorEl.classList.remove('hidden');
+            }
+        }
+
+        // Função para criar o HTML dos cards e injetar na tela
+        function renderCards(resultados) {
+            const gridEl = document.getElementById('players-grid');
+            
+            resultados.forEach(item => {
+                // Pega os dados da última rodada válida para o header do card
+                const validRounds = item.history.filter(h => !h.error);
+                const latestData = validRounds[validRounds.length - 1].data;
+                
+                const time = latestData.time;
+                const patrimonioTotal = latestData.patrimonio;
+                const pontosCamp = latestData.pontos_campeonato;
+                
+                const escudoUrl = time.url_escudo_png || time.url_escudo_svg || 'https://via.placeholder.com/150?text=Sem+Escudo';
+                const nomeTime = time.nome || 'Time Desconhecido';
+                const nomeCartola = time.nome_cartola || item.nomeOriginal;
+
+                // Montar as linhas da tabela de histórico
+                let historyRows = '';
+                item.history.forEach(h => {
+                    if (h.error) {
+                        historyRows += `
+                            <tr class="border-b border-gray-100 bg-red-50">
+                                <td class="py-2 px-2 text-center text-red-500 font-medium">${h.rodada}</td>
+                                <td colspan="3" class="py-2 px-2 text-center text-xs text-red-400">Erro ao carregar</td>
+                            </tr>
+                        `;
+                    } else {
+                        historyRows += `
+                            <tr class="border-b border-gray-100 hover:bg-gray-50">
+                                <td class="py-2 px-2 text-center font-medium text-gray-700">${h.rodada}</td>
+                                <td class="py-2 px-2 text-center text-blue-600 font-semibold">${formatPoints(h.data.pontos)}</td>
+                                <td class="py-2 px-2 text-center text-gray-600">${formatPoints(h.data.pontos_campeonato)}</td>
+                                <td class="py-2 px-2 text-right text-yellow-600 font-medium">${formatMoney(h.data.patrimonio)}</td>
+                            </tr>
+                        `;
+                    }
+                });
+
+                const cardHTML = `
+                    <div class="bg-white rounded-xl shadow-md overflow-hidden card-hover border border-gray-100 flex flex-col">
+                        <!-- Header do Card -->
+                        <div class="h-24 bg-gradient-to-r from-orange-400 to-orange-600 relative">
+                            <div class="absolute -bottom-10 left-1/2 transform -translate-x-1/2">
+                                <img src="${escudoUrl}" alt="Escudo do ${nomeTime}" class="w-20 h-20 bg-white rounded-full p-1 shadow-lg object-contain">
+                            </div>
+                        </div>
+                        
+                        <!-- Corpo do Card -->
+                        <div class="pt-12 pb-4 px-4 flex-grow flex flex-col">
+                            <div class="text-center mb-4">
+                                <h2 class="text-xl font-bold text-gray-800 mb-1">${nomeTime}</h2>
+                                <div class="flex items-center justify-center gap-1 text-gray-500 text-sm">
+                                    <i data-lucide="user" class="w-4 h-4"></i>
+                                    <span>${nomeCartola} (${item.nomeOriginal})</span>
+                                </div>
+                            </div>
+                            
+                            <!-- Resumo Atual -->
+                            <div class="grid grid-cols-2 gap-2 mb-4">
+                                <div class="bg-blue-50 p-2 rounded-lg text-center">
+                                    <div class="text-[10px] text-gray-500 uppercase font-bold mb-1">Pts. Campeonato</div>
+                                    <div class="text-md font-bold text-blue-700">${formatPoints(pontosCamp)}</div>
+                                </div>
+                                <div class="bg-yellow-50 p-2 rounded-lg text-center">
+                                    <div class="text-[10px] text-gray-500 uppercase font-bold mb-1">Património Atual</div>
+                                    <div class="text-md font-bold text-yellow-700">${formatMoney(patrimonioTotal)}</div>
+                                </div>
+                            </div>
+
+                            <!-- Tabela de Histórico -->
+                            <div class="overflow-x-auto rounded-lg border border-gray-200">
+                                <table class="w-full text-sm text-left">
+                                    <thead class="text-xs text-gray-500 uppercase bg-gray-100">
+                                        <tr>
+                                            <th class="py-2 px-2 text-center">Rod.</th>
+                                            <th class="py-2 px-2 text-center">Pts.</th>
+                                            <th class="py-2 px-2 text-center">Total</th>
+                                            <th class="py-2 px-2 text-right">Património</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${historyRows}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                gridEl.innerHTML += cardHTML;
+            });
+        }
+
+        // --- SISTEMA DE ABAS E RANKINGS ---
+
+        function changeTab(tabName) {
+            // Oculta todas as views
+            document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
+            
+            // Reseta estilo dos botões
+            document.querySelectorAll('.tab-btn').forEach(el => {
+                el.classList.remove('text-orange-600', 'border-orange-600', 'border-b-2');
+                el.classList.add('text-gray-500');
+            });
+
+            // Mostra a view correta e ativa o botão
+            document.getElementById(`view-${tabName}`).classList.remove('hidden');
+            const activeTab = document.getElementById(`tab-${tabName}`);
+            activeTab.classList.remove('text-gray-500');
+            activeTab.classList.add('text-orange-600', 'border-orange-600', 'border-b-2');
+        }
+
+        // Construtor genérico de tabelas de ranking
+        function buildRankingTable(dataArray, valueLabel, formatFn, isCurrency = false) {
+            let rows = dataArray.map((item, index) => {
+                const isMedal = index < 3;
+                const medalColors = ['text-yellow-500', 'text-gray-400', 'text-amber-600'];
+                const rankDisplay = isMedal 
+                    ? `<i data-lucide="medal" class="w-6 h-6 mx-auto ${medalColors[index]}"></i>` 
+                    : `<span class="font-bold text-gray-500 text-lg">${index + 1}º</span>`;
+                
+                const valColor = isCurrency ? 'text-yellow-600' : 'text-blue-600';
+
+                return `
+                    <tr class="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                        <td class="py-4 px-4 text-center w-16 align-middle">${rankDisplay}</td>
+                        <td class="py-4 px-4 flex items-center gap-4">
+                            <img src="${item.escudo}" class="w-10 h-10 rounded-full border border-gray-200 shadow-sm object-contain bg-white">
+                            <div>
+                                <div class="font-bold text-gray-800 text-base leading-tight">${item.nomeTime}</div>
+                                <div class="text-xs text-gray-500 mt-0.5">${item.nomeCartola}</div>
+                            </div>
+                        </td>
+                        <td class="py-4 px-4 text-right font-bold ${valColor} text-lg align-middle">
+                            ${formatFn(item.value)}
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+            
+            return `
+                <div class="overflow-x-auto bg-white rounded-xl shadow-md border border-gray-100">
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-gray-50 text-gray-600 uppercase text-xs border-b border-gray-200">
+                            <tr>
+                                <th class="py-3 px-4 text-center font-bold">Pos</th>
+                                <th class="py-3 px-4 font-bold">Time</th>
+                                <th class="py-3 px-4 text-right font-bold">${valueLabel}</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        function renderRankingGeral() {
+            const mapped = appData.map(player => {
+                const latest = player.history.filter(h => !h.error).pop()?.data;
+                return {
+                    nomeTime: latest?.time?.nome || 'Desconhecido',
+                    nomeCartola: latest?.time?.nome_cartola || player.nomeOriginal,
+                    escudo: latest?.time?.url_escudo_png || latest?.time?.url_escudo_svg || 'https://via.placeholder.com/150',
+                    value: latest?.pontos_campeonato || 0
+                };
+            }).sort((a, b) => b.value - a.value); // Ordena do maior para menor
+            
+            document.getElementById('ranking-geral-container').innerHTML = buildRankingTable(mapped, 'Pontos Acumulados', formatPoints);
+        }
+
+        function renderRankingPatrimonio() {
+            const mapped = appData.map(player => {
+                const latest = player.history.filter(h => !h.error).pop()?.data;
+                return {
+                    nomeTime: latest?.time?.nome || 'Desconhecido',
+                    nomeCartola: latest?.time?.nome_cartola || player.nomeOriginal,
+                    escudo: latest?.time?.url_escudo_png || latest?.time?.url_escudo_svg || 'https://via.placeholder.com/150',
+                    value: latest?.patrimonio || 0
+                };
+            }).sort((a, b) => b.value - a.value); // Ordena do maior para menor
+            
+            document.getElementById('ranking-patrimonio-container').innerHTML = buildRankingTable(mapped, 'Património', formatMoney, true);
+        }
+
+        function renderRankingRodadaSelector() {
+            let options = '';
+            // Lista das rodadas em ordem decrescente (mais recente primeiro)
+            for(let r = maxRound; r >= 1; r--) {
+                options += `<option value="${r}">Rodada ${r}</option>`;
+            }
+            const selectEl = document.getElementById('rodada-select');
+            selectEl.innerHTML = options;
+            selectEl.value = maxRound; // Seleciona a última rodada por padrão
+            renderRankingRodada(maxRound);
+        }
+
+        function renderRankingRodada(rodadaStr) {
+            const rodada = parseInt(rodadaStr);
+            const mapped = appData.map(player => {
+                // Tenta achar a rodada exata
+                const roundData = player.history.find(h => h.rodada === rodada && !h.error)?.data;
+                // Pega os dados mais recentes como fallback de escudo e nome
+                const latest = player.history.filter(h => !h.error).pop()?.data; 
+                
+                return {
+                    nomeTime: roundData?.time?.nome || latest?.time?.nome || 'Desconhecido',
+                    nomeCartola: roundData?.time?.nome_cartola || latest?.time?.nome_cartola || player.nomeOriginal,
+                    escudo: roundData?.time?.url_escudo_png || roundData?.time?.url_escudo_svg || latest?.time?.url_escudo_png || latest?.time?.url_escudo_svg || 'https://via.placeholder.com/150',
+                    value: roundData?.pontos || 0
+                };
+            }).sort((a, b) => b.value - a.value); // Ordena do maior para menor
+            
+            document.getElementById('ranking-rodada-container').innerHTML = buildRankingTable(mapped, `Pontos (Rod. ${rodada})`, formatPoints);
+            lucide.createIcons(); // Atualiza os ícones de medalha quando a tabela muda
+        }
+
+        // Formata para moeda Real (BRL), suportando negativos
+        const formatReal = (value) => {
+            const sign = value < 0 ? '-' : '';
+            const absValue = Math.abs(value);
+            return `${sign}R$ ${absValue.toFixed(2).replace('.', ',')}`;
+        };
+
+        function renderRankingPremiacao() {
+            // 1. Inicializa os ganhos, gastos e estatísticas de cada jogador
+            const premios = {};
+            appData.forEach(player => {
+                premios[player.id] = {
+                    nomeOriginal: player.nomeOriginal,
+                    id: player.id,
+                    totalGanho: 0,
+                    totalGasto: 0,
+                    vitorias: 0,
+                    segundos: 0,
+                    latestData: player.history.filter(h => !h.error).pop()?.data
+                };
+            });
+
+            // 2. Calcula os vencedores e custos de cada rodada
+            for (let r = 1; r <= maxRound; r++) {
+                const roundResults = [];
+                appData.forEach(player => {
+                    const roundData = player.history.find(h => h.rodada === r && !h.error)?.data;
+                    if (roundData && roundData.pontos !== undefined) {
+                        roundResults.push({
+                            id: player.id,
+                            pontos: roundData.pontos
+                        });
+                        // Subtrai R$ 5,00 por participar da rodada
+                        premios[player.id].totalGasto += 5.00;
+                    }
+                });
+
+                // Ordena os resultados da rodada (maior para menor)
+                roundResults.sort((a, b) => b.pontos - a.pontos);
+
+                // Distribui a premiação: R$ 24 para o 1º (80%), R$ 6 para o 2º (20%)
+                if (roundResults.length > 0) {
+                    premios[roundResults[0].id].totalGanho += 24.00;
+                    premios[roundResults[0].id].vitorias += 1;
+                }
+                if (roundResults.length > 1) {
+                    premios[roundResults[1].id].totalGanho += 6.00;
+                    premios[roundResults[1].id].segundos += 1;
+                }
+            }
+
+            // 3. Prepara os dados formatados (calculando o saldo final) e os ordena pelo saldo
+            const mapped = Object.values(premios).map(p => {
+                const saldoLiquido = p.totalGanho - p.totalGasto;
+                return {
+                    nomeTime: p.latestData?.time?.nome || 'Desconhecido',
+                    nomeCartola: p.latestData?.time?.nome_cartola || p.nomeOriginal,
+                    escudo: p.latestData?.time?.url_escudo_png || p.latestData?.time?.url_escudo_svg || 'https://via.placeholder.com/150',
+                    ganho: p.totalGanho,
+                    gasto: p.totalGasto,
+                    saldo: saldoLiquido,
+                    detalhes: `${p.vitorias}x Ouro, ${p.segundos}x Prata`
+                };
+            }).sort((a, b) => b.saldo - a.saldo);
+
+            // 4. Constrói o HTML customizado para a tabela de dinheiro
+            let rows = mapped.map((item, index) => {
+                const isMedal = index < 3;
+                const medalColors = ['text-yellow-500', 'text-gray-400', 'text-amber-600'];
+                const rankDisplay = isMedal 
+                    ? `<i data-lucide="medal" class="w-6 h-6 mx-auto ${medalColors[index]}"></i>` 
+                    : `<span class="font-bold text-gray-500 text-lg">${index + 1}º</span>`;
+                
+                // Define a cor do saldo: verde para positivo, vermelho para negativo, cinza para zero
+                let saldoColor = 'text-gray-600';
+                if (item.saldo > 0) saldoColor = 'text-green-600';
+                if (item.saldo < 0) saldoColor = 'text-red-500';
+
+                return `
+                    <tr class="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                        <td class="py-4 px-4 text-center w-16 align-middle">${rankDisplay}</td>
+                        <td class="py-4 px-4 flex items-center gap-4">
+                            <img src="${item.escudo}" class="w-10 h-10 rounded-full border border-gray-200 shadow-sm object-contain bg-white">
+                            <div>
+                                <div class="font-bold text-gray-800 text-base leading-tight">${item.nomeTime}</div>
+                                <div class="text-xs text-gray-500 mt-0.5">${item.nomeCartola} <span class="font-medium text-amber-600 ml-1">(${item.detalhes})</span></div>
+                            </div>
+                        </td>
+                        <td class="py-4 px-4 text-center text-red-400 align-middle hidden sm:table-cell">
+                            -${formatReal(item.gasto)}
+                        </td>
+                        <td class="py-4 px-4 text-center text-green-500 align-middle hidden sm:table-cell">
+                            ${formatReal(item.ganho)}
+                        </td>
+                        <td class="py-4 px-4 text-right font-bold ${saldoColor} text-lg align-middle">
+                            ${formatReal(item.saldo)}
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+            
+            const htmlTable = `
+                <div class="bg-green-50 border border-green-200 text-green-800 p-4 rounded-xl mb-4 text-sm text-center shadow-sm">
+                    <p><strong>Regras da Liga:</strong> Custo de R$ 5,00 por rodada (Fundo total de R$ 30,00). <br> 🥇 1º da rodada: R$ 24,00 | 🥈 2º da rodada: R$ 6,00</p>
+                </div>
+                <div class="overflow-x-auto bg-white rounded-xl shadow-md border border-gray-100">
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-gray-50 text-gray-600 uppercase text-xs border-b border-gray-200">
+                            <tr>
+                                <th class="py-3 px-4 text-center font-bold">Pos</th>
+                                <th class="py-3 px-4 font-bold">Time</th>
+                                <th class="py-3 px-4 text-center font-bold hidden sm:table-cell">Investido</th>
+                                <th class="py-3 px-4 text-center font-bold hidden sm:table-cell">Prémios</th>
+                                <th class="py-3 px-4 text-right font-bold">Saldo Líquido</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                </div>
+            `;
+            
+            document.getElementById('ranking-premiacao-container').innerHTML = htmlTable;
+        }
+
+        // Iniciar busca assim que a página carregar
+        document.addEventListener('DOMContentLoaded', fetchData);
+
+        // Registrar o Service Worker para transformar em PWA
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                // Previne o erro no ambiente de preview verificando se o protocolo é HTTP/HTTPS
+                if (window.location.protocol === 'http:' || window.location.protocol === 'https:') {
+                    navigator.serviceWorker.register('sw.js')
+                        .then(registration => console.log('PWA Service Worker registado!'))
+                        .catch(err => console.warn('Aviso: Service Worker não registado (normal em modo preview).', err));
+                } else {
+                    console.log('Modo PWA inativo: O Service Worker requer hospedagem real (HTTP/HTTPS) para funcionar.');
+                }
+            });
+        }
+    </script>
+</body>
+</html>
